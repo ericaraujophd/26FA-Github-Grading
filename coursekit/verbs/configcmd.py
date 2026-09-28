@@ -37,6 +37,7 @@ import os
 import subprocess
 
 from .. import assignment as asg
+from .. import cheatsheet as sheetgen
 from .. import checks
 from .. import config as cfg
 from .. import ghcli, out
@@ -195,7 +196,16 @@ def run(course: cfg.Course, argv) -> int:
     ap.add_argument("value", nargs="?")
     ap.add_argument("--check", action="store_true", help="re-run every precondition check")
     ap.add_argument("--edit", action="store_true", help="open course.json in $EDITOR")
+    ap.add_argument("--cheatsheet", action="store_true",
+                    help="regenerate CHEATSHEET.md and CHEATSHEET.pdf for this course")
     args = ap.parse_args(argv)
+    if args.cheatsheet:
+        # The one page is generated, never hand-edited, so it is safe to
+        # overwrite: it says cs108 because course.json says cs108. Re-run
+        # this after upgrading the toolkit to pick up new commands.
+        md, pdf = sheetgen.write(course)
+        out.say(f"wrote {md}\n      {pdf}")
+        return 0
     if args.check:
         return check(course)
     if args.edit:

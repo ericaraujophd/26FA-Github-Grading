@@ -22,7 +22,13 @@ A grader is never distributed to, never graded, and never counted in the
 class size. They are on the roster because the roster is the course's list
 of people.
 
-## Once per assignment
+## Handing out
+
+`assign --go` grants it for you. Every repository it creates or finds is
+granted read for every grader on the roster, so a repository handed out
+today is visible to the grader today.
+
+For everything already handed out, or after adding a grader mid-term:
 
 ```bash
 cs108 access a04          # preview: who gets what
@@ -30,18 +36,16 @@ cs108 access a04 --go
 cs108 access --go         # every assignment that has repositories
 ```
 
-It invites them to the organization (one invitation, which they accept
-once) and grants `pull`, read, on every existing student repository plus
-the template, so they can see what students were given.
+Both invite them to the organization (one invitation, accepted once) and
+grant `pull`, read, on every existing student repository plus the
+template, so they can see what students were given.
 
 Read, never write. A grader cannot push to a student's repository and no
 flag here will give them that. The run prints `0 write accesses granted`
 every time, for the same reason `patch` prints `0 deliverables changed`.
 
-Re-run it when a late student's repository appears, or when you add a
-second grader. Repositories they already have are left alone. `assign`
-reminds you that graders exist, because a repository created today is
-invisible to them until this runs.
+Re-run it when you add a second grader. Repositories they already have are
+left alone.
 
 ## What you send the grader
 
@@ -49,9 +53,11 @@ invisible to them until this runs.
 cs108 access a04 --share ~/Desktop/cs108-grader
 ```
 
-A folder of a few kilobytes: `course.json`, the roster with email
-addresses blanked, and each assignment's `assignment.json` and `starter/`.
-It does **not** contain `answers/` or the grading bundles. It touches
+`course.json`, the roster with email addresses blanked, each assignment's
+`assignment.json` and `starter/`, and the solution side: `answers/` and
+the grading bundles. With the bundle they can run `marks` on an autograded
+assignment, which is the difference between a grader who can grade and one
+who can only download. `--no-solutions` leaves that half out. It touches
 nothing on GitHub, so it needs no `--go`.
 
 Send them that folder and the toolkit, and they run, on their own machine:
@@ -63,6 +69,7 @@ gh auth setup-git
 
 cs108 collect a04     # clones every repository into ~/cs108-grading/a04/checkouts/
 cs108 sheet a04       # a CSV to type marks into, sorted by last name
+cs108 marks a04       # autograded assignments: runs the grader, writes a gradebook
 ```
 
 `collect` updates existing clones rather than starting over, and takes

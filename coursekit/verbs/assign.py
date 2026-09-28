@@ -18,6 +18,12 @@ steps:
      upstream link, no "fork of a fork", a clean history the student owns.
   3. GRANT push access, once they are an active member.
 
+And, once per run, READ access for every grader on the roster (role=grader),
+on every repository this touches. A repository created today is then visible
+to the grader today, instead of waiting for someone to remember `access`.
+`access` remains the way to grant retroactively, to revoke, and to see what
+each grader can reach.
+
 Re-run it freely as late usernames arrive. Everyone already set up is left
 alone. A student with no github_id in the roster is reported by name and
 skipped; nothing can be done for them until the roster has it.
@@ -96,7 +102,33 @@ def run(course: cfg.Course, argv) -> int:
     out.say(f"  roster   : {course.roster}")
     out.say(f"  order    : {todo} still to do, first; then the rest\n")
 
+    # ── graders ────────────────────────────────────────────────────────
+    # Read access, granted on every repository below. Membership is settled
+    # once, here: without it, each repository would send its own invitation,
+    # so a class of forty-two would mean forty-two emails to accept.
+    try:
+        graders = [g for g in rostermod.graders(course.roster) if g["github_id"]]
+    except rostermod.RosterError:
+        graders = []
+    active_graders, waiting_graders = [], []
+    for g in graders:
+        login = g["github_id"]
+        state = ghcli.membership_state(course.org, login)
+        if state != "active" and args.go:
+            state, err = ghcli.invite(course.org, login)
+            if err:
+                out.bad_line(login, f"grader: {err}")
+                continue
+        if state == "active":
+            active_graders.append(g)
+        else:
+            waiting_graders.append(login)
+    if graders:
+        who = ", ".join(g["github_id"] for g in graders)
+        out.say(f"  graders  : {who} (read access on every repository below)\n")
+
     rows, problems, pending, skipped = [], [], [], []
+    grader_grants, grader_errors = 0, []
     for student in roster:
         username = student["username"]
         login = student["github_id"]
@@ -153,6 +185,15 @@ def run(course: cfg.Course, argv) -> int:
                 row["error"] = err
                 problems.append((username, err))
 
+        # Read for the graders. PUT is idempotent, so this costs one call
+        # per grader per repository and never needs a check first.
+        for g in (active_graders if args.go else []):
+            err = ghcli.grant_access(full_name, g["github_id"], "pull")
+            if err:
+                grader_errors.append(f"{g['github_id']} on {full_name}: {err}")
+            else:
+                grader_grants += 1
+
         out.ok_line(username, f"{state:<14} {repo_state:<12} {full_name}")
         rows.append(row)
 
@@ -170,16 +211,17 @@ def run(course: cfg.Course, argv) -> int:
         for username, err in problems:
             out.say(f"  {username:<24} {err}")
 
-    # A grader is not distributed to, so nothing above touched them. Say so
-    # once, here, because a repository created today is invisible to them
-    # until `access` runs.
-    try:
-        graders = rostermod.graders(course.roster)
-    except rostermod.RosterError:
-        graders = []
     if graders:
-        out.say(f"\n{len(graders)} grader(s) on the roster ({', '.join(g['github_id'] or g['username'] for g in graders)}).")
-        out.say(f"  They get read access only when you run:  {course.course} access {a.id} --go")
+        if args.go:
+            out.say(f"\nread access granted {grader_grants} time(s) for "
+                    f"{len(active_graders)} grader(s)" + (" (nothing else changed for them)" if grader_grants else ""))
+            for err in grader_errors[:5]:
+                out.say(f"  {err}")
+        else:
+            out.say(f"\nwould grant read access to {len(graders)} grader(s) on every repository above")
+        if waiting_graders:
+            out.say(f"  waiting on {', '.join(waiting_graders)} to accept the organization invitation;")
+            out.say(f"  re-run this, or {course.course} access {a.id} --go, once they have")
 
     if args.go:
         path = course.root / f"distribution-{a.id}.csv"

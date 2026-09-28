@@ -49,11 +49,13 @@ is out of step, and `{{course}} doctor` when something feels wrong.
 
 ## Working with a grader
 
-Add a roster row with `role=grader` and their GitHub login, then:
+Add a roster row with `role=grader` and their GitHub login. From then on
+`assign --go` gives them read access to every repository it hands out.
 
 ```bash
-{{course}} access a04 --go                    # read access to every student repository
-{{course}} access a04 --share ~/for-grader    # the folder they run `collect` from
+{{course}} access a04 --go                    # cover what is already handed out
+{{course}} access a04 --share ~/for-grader    # the folder they grade from
+{{course}} access a04 --revoke --go           # end of term
 ```
 
 ## Three things to know

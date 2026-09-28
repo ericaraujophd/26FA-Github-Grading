@@ -58,10 +58,11 @@ cs108 ui                   # the same thing in a browser
 cs108 doctor               # when something feels wrong
 ```
 
-A teaching assistant grades with you: add a roster row with `role=grader`,
-then `cs108 access a04 --go` gives them read access to every student
-repository and `cs108 access a04 --share ~/for-grader` writes the small
-folder they run `collect` from. See `docs/graders.md`.
+A teaching assistant grades with you: add a roster row with `role=grader`
+and `assign --go` grants them read access as it hands repositories out.
+`cs108 access a04 --go` covers what is already out there, and
+`cs108 access a04 --share ~/for-grader` writes the folder they run
+`collect` and `marks` from. See `docs/graders.md`.
 
 `marks` writes `~/cs108-grading/a01/gradebook.csv`. The `complete` column
 (pushed anything beyond the starter) is the one to use; `score` is

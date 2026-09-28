@@ -49,10 +49,13 @@ WHAT IT DOES, PER GRADER
 the organization; that is a deliberate act you do on GitHub, and it is
 printed as a reminder.
 
---share writes a small folder the grader can install the toolkit against:
-course.json, the roster (email addresses blanked), and each assignment's
-assignment.json and starter/. It never copies answers/ or the grading
-bundles. Nothing about it touches GitHub, so it needs no --go.
+--share writes a folder the grader can install the toolkit against:
+course.json, the roster (email addresses blanked), each assignment's
+assignment.json and starter/, and the solution side (answers/ and the
+grading bundle) so they can compare against the reference and run `marks`
+on an autograded assignment. --no-solutions leaves that half out, for a
+grader who only needs to clone. Nothing about it touches GitHub, so it
+needs no --go.
 """
 
 from __future__ import annotations
@@ -103,14 +106,17 @@ def assignments_with_repos(course: cfg.Course, wanted: str, have: Dict[str, dict
     return out_ids
 
 
-def share(course: cfg.Course, dest: Path, wanted: str, graders: List[dict]) -> int:
+def share(course: cfg.Course, dest: Path, wanted: str, graders: List[dict],
+          solutions: bool = True) -> int:
     """Write a folder a grader can run the toolkit against.
 
     What goes in: course.json, roster/roster.csv with email addresses
-    blanked, and for each assignment its assignment.json plus starter/.
-    What stays behind: answers/, the grading bundles, and the templates
-    folder. A grader needs to know what students were given and which
-    repositories exist; he does not need the solutions.
+    blanked, and for each assignment its assignment.json, starter/, and
+    (unless --no-solutions) answers/ and the grading bundle. A grader who
+    has the bundle can run `marks` on an autograded assignment, which is
+    the difference between a grader who can grade and one who can only
+    download. The templates folder stays behind: publishing is the
+    instructor's job, not theirs.
     """
     dest = Path(dest).expanduser()
     if dest.exists() and any(dest.iterdir()):
@@ -143,6 +149,15 @@ def share(course: cfg.Course, dest: Path, wanted: str, graders: List[dict]) -> i
             shutil.copytree(starter, dest / "assignments" / aid / "starter",
                             ignore=shutil.ignore_patterns(*asg.SKIP_NAMES),
                             dirs_exist_ok=True)
+        if solutions:
+            if course.answers(aid).is_dir():
+                shutil.copytree(course.answers(aid), dest / "assignments" / aid / "answers",
+                                ignore=shutil.ignore_patterns(*asg.SKIP_NAMES),
+                                dirs_exist_ok=True)
+            if course.bundle(aid).is_dir():
+                shutil.copytree(course.bundle(aid), dest / "autograders" / aid,
+                                ignore=shutil.ignore_patterns(*asg.SKIP_NAMES),
+                                dirs_exist_ok=True)
         copied.append(aid)
 
     names = ", ".join(rostermod.display_name(g) for g in graders) or "your grader"
@@ -172,6 +187,9 @@ for an assignment. You cannot push to a student repository.
     {course.course} collect {copied[0] if copied else 'a04'}
     {course.course} sheet {copied[0] if copied else 'a04'}
 
+On an autograded assignment, `{course.course} marks <assignment>` runs the
+grader instead and writes a gradebook. {"The reference solutions are in each assignment's answers/ folder." if solutions else "The reference solutions are not in this folder; ask the instructor."}
+
 `collect` clones every student's repository into
 `~/{course.course}-grading/<assignment>/checkouts/<username>/` and stops.
 Re-running it updates the clones rather than starting again, so a late push
@@ -187,16 +205,21 @@ To grade exactly what existed at the deadline:
 
 ## What is not here
 
-The reference solutions (`answers/`) and the grading bundles are not in this
-folder. Ask the instructor if you need them.
+The workflow templates, and anything that publishes to GitHub. You have read
+access to the repositories and nothing more: you cannot push to a student's
+work, and no command here will let you.
 
 Prepared for {names}.
 """, encoding="utf-8")
 
     out.say(f"wrote {dest}")
     out.say(f"  course.json, roster/roster.csv (email addresses blanked),")
-    out.say(f"  and {len(copied)} assignment(s): {', '.join(copied) or 'none'} (assignment.json + starter/)")
-    out.say(f"  NOT included: answers/, the grading bundles")
+    out.say(f"  and {len(copied)} assignment(s): {', '.join(copied) or 'none'}")
+    if solutions:
+        out.say(f"  including answers/ and the grading bundles, so the grader can run `marks`")
+        out.say(f"  (leave them out with --no-solutions)")
+    else:
+        out.say(f"  starter/ only; answers/ and the grading bundles were left out")
     out.say(f"\n  Send the folder to the grader, then give them access:")
     out.say(f"    {course.course} access {wanted or '<assignment>'} --go")
     return 0
@@ -210,11 +233,13 @@ def run(course: cfg.Course, argv) -> int:
     ap.add_argument("--revoke", action="store_true", help="remove access instead of granting it")
     ap.add_argument("--share", metavar="DIR",
                     help="write a folder the grader can run the toolkit from (touches no GitHub)")
+    ap.add_argument("--no-solutions", dest="solutions", action="store_false",
+                    help="with --share: leave answers/ and the grading bundles out")
     args = ap.parse_args(argv)
 
     graders = graders_or_explain(course)
     if args.share:
-        return share(course, Path(args.share), args.assignment, graders)
+        return share(course, Path(args.share), args.assignment, graders, args.solutions)
     if not graders:
         return 1
 

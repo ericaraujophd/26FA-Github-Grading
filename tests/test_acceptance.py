@@ -637,6 +637,14 @@ class T07RosterStatusDoctor(unittest.TestCase):
         finally:
             proc.terminate()
 
+    def test_06b_config_regenerates_the_cheatsheet(self):
+        pdf = ENV.course_dir / "CHEATSHEET.pdf"
+        pdf.unlink()
+        text = ENV.run("config", "--cheatsheet")
+        self.assertIn("CHEATSHEET.pdf", text)
+        self.assertTrue(pdf.is_file())
+        self.assertIn(f"{COURSE} access a04", (ENV.course_dir / "CHEATSHEET.md").read_text())
+
     def test_07_config_show_and_check(self):
         text = ENV.run("config")
         self.assertIn("runner", text)
@@ -651,6 +659,13 @@ class T08Access(unittest.TestCase):
 
     def collaborators(self, repo):
         return ENV.gh_state()["orgs"][ORG]["repos"][repo].get("collaborators", {})
+
+    def test_00_start_from_no_access(self):
+        # assign already granted read while handing repositories out, which
+        # is the point of it; take it all away so the grant path below is
+        # exercised from nothing.
+        ENV.run("access", "--revoke", "--go")
+        self.assertNotIn("tmiller-gh", self.collaborators(f"{COURSE}-a01-ada"))
 
     def test_01_preview_changes_nothing(self):
         before = ENV.snapshot_github()
@@ -686,15 +701,24 @@ class T08Access(unittest.TestCase):
         self.assertEqual(self.collaborators(f"{COURSE}-a01-ada").get("ada-gh"), "write")
         ENV.run("access", "a01", "--go")
 
-    def test_06_share_writes_a_folder_without_the_answers(self):
+    def test_06_share_carries_the_solutions_and_can_leave_them_out(self):
+        bare = ENV.tmp / "for-grader-bare"
+        ENV.run("access", "a01", "--share", str(bare), "--no-solutions")
+        self.assertTrue((bare / "assignments/a01/starter/test.js").is_file())
+        self.assertFalse((bare / "assignments/a01/answers").exists())
+        self.assertFalse((bare / "autograders").exists())
+
         dest = ENV.tmp / "for-grader"
         text = ENV.run("access", "a01", "--share", str(dest))
-        self.assertIn("NOT included", text)
+        self.assertIn("including answers/", text)
         self.assertTrue((dest / "course.json").is_file())
         self.assertTrue((dest / "assignments/a01/starter/test.js").is_file())
         self.assertTrue((dest / "assignments/a01/assignment.json").is_file())
-        self.assertFalse((dest / "assignments/a01/answers").exists())
-        self.assertFalse((dest / "autograders").exists())
+        self.assertTrue((dest / "assignments/a01/answers/app.js").is_file())
+        self.assertTrue((dest / "autograders/a01/autograder.js").is_file())
+        # the grader can grade, not only download
+        text = ENV.run("marks", "a01", cwd=dest)
+        self.assertIn("gradebook:", text)
         rows = list(csv.DictReader((dest / "roster/roster.csv").read_text().splitlines()))
         self.assertTrue(all(r["email"] == "" for r in rows))
         self.assertIn("tmiller", [r["username"] for r in rows])
@@ -703,10 +727,17 @@ class T08Access(unittest.TestCase):
         text = ENV.run("collect", "a01", cwd=dest)
         self.assertIn("collected", text)
 
-    def test_07_assign_reminds_that_graders_need_access(self):
+    def test_07_assign_grants_read_access_as_it_goes(self):
+        ENV.run("access", "a01", "--revoke", "--go")
+        self.assertNotIn("tmiller-gh", self.collaborators(f"{COURSE}-a01-ada"))
         text = ENV.run("assign", "a01", "--go")
-        self.assertIn("grader(s) on the roster", text)
-        self.assertIn(f"{COURSE} access a01 --go", text)
+        self.assertIn("read access granted", text)
+        self.assertEqual(self.collaborators(f"{COURSE}-a01-ada").get("tmiller-gh"), "read")
+        # and the preview of it still changes nothing
+        before = ENV.snapshot_github()
+        text = ENV.run("assign", "a01")
+        self.assertIn("would grant read access", text)
+        self.assertEqual(before, ENV.snapshot_github())
 
     def test_08_doctor_lists_graders(self):
         text = ENV.run("doctor")
