@@ -249,7 +249,19 @@ def api(args, state):
             log = git(["--git-dir", str(bare(org, name)), "log", "-1", "--format=%H"])
             out([{"sha": log.stdout.strip()}])
         if sub == "collaborators":
-            o["repos"][name].setdefault("collaborators", []).append(parts[4])
+            collab = o["repos"][name].setdefault("collaborators", {})
+            if isinstance(collab, list):          # an older state file
+                collab = {c: "write" for c in collab}
+                o["repos"][name]["collaborators"] = collab
+            if len(parts) == 4:                   # GET, list them
+                out([{"login": k, "role_name": v} for k, v in sorted(collab.items())])
+            login = parts[4]
+            if method == "DELETE":
+                collab.pop(login, None)
+                save(state)
+                out({})
+            collab[login] = {"pull": "read", "push": "write"}.get(
+                fields.get("permission", "push"), fields.get("permission", "push"))
             save(state)
             out({})
         if sub == "contents":

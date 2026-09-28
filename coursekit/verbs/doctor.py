@@ -205,6 +205,13 @@ def run(course: cfg.Course, argv) -> int:
         results.append(Result("roster", FAIL, str(exc).splitlines()[0]))
     participants = [r for r in rows if r["role"] in rostermod.PARTICIPANT_ROLES]
     tester = [r for r in participants if r["role"] == "test"]
+    grader_rows = [r for r in rows if r["role"] in rostermod.GRADER_ROLES]
+    if grader_rows:
+        bad = [g["username"] for g in grader_rows if not g["github_id"]]
+        results.append(Result("graders", WARN if bad else OK,
+                              ("no github_id: " + ", ".join(bad)) if bad else
+                              f"{len(grader_rows)} grader(s): " + ", ".join(g["github_id"] for g in grader_rows)
+                              + f"  (read access: {course.course} access <assignment> --go)"))
 
     # ── assignments on disk ────────────────────────────────────────────
     ids = asg.list_ids(course)

@@ -162,6 +162,7 @@ bob,Bob,Émile,bob@example.edu,A,bob-gh,student
 noid,No,Identifier,noid@example.edu,B,,student
 tester,Test,Account,,A,tester-gh,test
 prof,The,Instructor,prof@example.edu,,instructor-gh,teacher
+tmiller,Tami,Miller,tami@example.edu,,tmiller-gh,grader
 """
 
 
@@ -180,7 +181,7 @@ class T01Install(unittest.TestCase):
         # The cheatsheet says cs108, never <course>.
         self.assertNotIn("<course>", (ENV.course_dir / "CHEATSHEET.md").read_text())
         (ENV.course_dir / "roster" / "roster.csv").write_text(ROSTER, encoding="utf-8")
-        ENV.set_gh_state(auto_accept=["ada-gh", "tester-gh"])
+        ENV.set_gh_state(auto_accept=["ada-gh", "tester-gh", "tmiller-gh"])
 
     def test_02_second_run_destroys_nothing(self):
         marker = ENV.course_dir / "assignments" / "keep-me.txt"
@@ -642,6 +643,75 @@ class T07RosterStatusDoctor(unittest.TestCase):
         self.assertIn("course.json", text)
         text = ENV.run("config", "--check")
         self.assertIn("authenticated as instructor", text)
+
+
+class T08Access(unittest.TestCase):
+    """A grader gets read access to every student repository and clones them
+    himself, instead of the instructor mailing the folder around."""
+
+    def collaborators(self, repo):
+        return ENV.gh_state()["orgs"][ORG]["repos"][repo].get("collaborators", {})
+
+    def test_01_preview_changes_nothing(self):
+        before = ENV.snapshot_github()
+        text = ENV.run("access", "a01")
+        self.assertIn("tmiller-gh", text)
+        self.assertIn("would change", text)
+        self.assertEqual(before, ENV.snapshot_github())
+        self.assertNotIn("tmiller-gh", self.collaborators(f"{COURSE}-a01-ada"))
+
+    def test_02_grants_read_everywhere_and_write_nowhere(self):
+        text = ENV.run("access", "a01", "--go")
+        self.assertIn("0 write accesses granted", text)
+        for repo in (f"{COURSE}-a01-ada", f"{COURSE}-a01-bob", f"{COURSE}-a01-tester",
+                     f"{COURSE}-a01-starter"):
+            self.assertEqual(self.collaborators(repo).get("tmiller-gh"), "read", repo)
+        # the student keeps write on their own repository
+        self.assertEqual(self.collaborators(f"{COURSE}-a01-ada").get("ada-gh"), "write")
+
+    def test_03_is_idempotent(self):
+        text = ENV.run("access", "a01", "--go")
+        self.assertIn("0 access(es) granted", text)
+        self.assertIn("already had read", text)
+
+    def test_04_every_assignment_at_once(self):
+        ENV.run("access", "--go")
+        self.assertEqual(self.collaborators(f"{COURSE}-a09-tester").get("tmiller-gh"), "read")
+
+    def test_05_revoke_takes_it_back(self):
+        text = ENV.run("access", "a01", "--revoke", "--go")
+        self.assertNotIn("tmiller-gh", self.collaborators(f"{COURSE}-a01-ada"))
+        self.assertIn("still members of", text)
+        # the student is untouched
+        self.assertEqual(self.collaborators(f"{COURSE}-a01-ada").get("ada-gh"), "write")
+        ENV.run("access", "a01", "--go")
+
+    def test_06_share_writes_a_folder_without_the_answers(self):
+        dest = ENV.tmp / "for-grader"
+        text = ENV.run("access", "a01", "--share", str(dest))
+        self.assertIn("NOT included", text)
+        self.assertTrue((dest / "course.json").is_file())
+        self.assertTrue((dest / "assignments/a01/starter/test.js").is_file())
+        self.assertTrue((dest / "assignments/a01/assignment.json").is_file())
+        self.assertFalse((dest / "assignments/a01/answers").exists())
+        self.assertFalse((dest / "autograders").exists())
+        rows = list(csv.DictReader((dest / "roster/roster.csv").read_text().splitlines()))
+        self.assertTrue(all(r["email"] == "" for r in rows))
+        self.assertIn("tmiller", [r["username"] for r in rows])
+        self.assertIn(f"{COURSE} collect a01", (dest / "README.md").read_text())
+        # and the grader can actually collect from it
+        text = ENV.run("collect", "a01", cwd=dest)
+        self.assertIn("collected", text)
+
+    def test_07_assign_reminds_that_graders_need_access(self):
+        text = ENV.run("assign", "a01", "--go")
+        self.assertIn("grader(s) on the roster", text)
+        self.assertIn(f"{COURSE} access a01 --go", text)
+
+    def test_08_doctor_lists_graders(self):
+        text = ENV.run("doctor")
+        self.assertIn("graders", text)
+        self.assertIn("tmiller-gh", text)
 
 
 if __name__ == "__main__":

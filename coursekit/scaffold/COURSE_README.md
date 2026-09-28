@@ -47,6 +47,15 @@ Then, when marks are wanted:
 Nothing changes GitHub without `--go`. Run `{{course}}` on its own to see what
 is out of step, and `{{course}} doctor` when something feels wrong.
 
+## Working with a grader
+
+Add a roster row with `role=grader` and their GitHub login, then:
+
+```bash
+{{course}} access a04 --go                    # read access to every student repository
+{{course}} access a04 --share ~/for-grader    # the folder they run `collect` from
+```
+
 ## Three things to know
 
 1. **Nothing changes GitHub without `--go`.** Every other invocation is a preview.

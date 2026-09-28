@@ -11,6 +11,7 @@ cs108 patch a04 --go     push a corrected do-not-edit file into existing repos
 cs108 marks a04          clone, autograde, write gradebook.csv
 cs108 collect a04        clone and stop, for reading by hand
 cs108 sheet a04          a CSV to type manual marks into
+cs108 access a04 --go    give a grader read access to every student repository
 cs108 students import f.csv --go   merge GitHub usernames into the roster
 cs108 doctor             check everything is still healthy
 cs108 config             show or change any setting
@@ -161,6 +162,7 @@ capability, add the verb first and surface it second.
 | `docs/writing-an-assignment.md` | writing your first assignment, or your tenth |
 | `docs/score-vs-complete.md` | someone asks why a low score is marked complete |
 | `docs/troubleshooting.md` | something is wrong and you do not know which layer |
+| `docs/graders.md` | a teaching assistant needs everyone's work |
 | `docs/runners.md` | before the first assignment goes out, and when the tick stops |
 | `docs/course-tooling-brief.md` | the build brief this toolkit was made from |
 | `README.md` | the short version, for installing and the first assignment |

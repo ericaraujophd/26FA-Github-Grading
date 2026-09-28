@@ -294,10 +294,42 @@ def wait_for_content(full_name: str, timeout: int = 60) -> Optional[str]:
     return f"repository created but still empty after {timeout}s; re-run to confirm"
 
 
-def grant_push(full_name: str, login: str) -> Optional[str]:
+def collaborators(full_name: str) -> Dict[str, str]:
+    """{login (lowercased): role name} for people granted access directly.
+
+    One call answers "does the grader already have this repository?" for
+    every grader at once, which is what keeps `access` cheap on a class of
+    forty-two. A repository we cannot administer answers 403; that is not
+    fatal here, so it comes back empty and the write reports the real
+    error.
+    """
+    ok, data, _ = api(f"repos/{full_name}/collaborators?affiliation=direct&per_page=100",
+                      paginate=True)
+    if not ok or not isinstance(data, list):
+        return {}
+    out = {}
+    for c in data:
+        login = (c or {}).get("login")
+        if login:
+            out[login.lower()] = c.get("role_name") or c.get("permission") or ""
+    return out
+
+
+def grant_access(full_name: str, login: str, permission: str = "push") -> Optional[str]:
+    """Add one collaborator. `permission` is pull (read), push (write), ..."""
     ok, _, err = api(f"repos/{full_name}/collaborators/{login}", method="PUT",
-                     fields={"permission": "push"})
-    return None if ok else f"could not grant push: {err[:180]}"
+                     fields={"permission": permission})
+    return None if ok else f"could not grant {permission}: {err[:180]}"
+
+
+def revoke_access(full_name: str, login: str) -> Optional[str]:
+    ok, _, err = api(f"repos/{full_name}/collaborators/{login}", method="DELETE")
+    return None if ok else f"could not revoke: {err[:180]}"
+
+
+def grant_push(full_name: str, login: str) -> Optional[str]:
+    """The student's own write access. `assign` calls this and nothing else."""
+    return grant_access(full_name, login, "push")
 
 
 def put_file(full_name: str, path: str, data: bytes, message: str,

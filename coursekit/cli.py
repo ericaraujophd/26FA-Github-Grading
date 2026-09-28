@@ -8,6 +8,7 @@ cli.py, one command for the whole course.
     cs108 template a04 --go   starter folder -> GitHub template repository
     cs108 assign a04 --go     one private repository per student
     cs108 patch a04 --go      push a corrected do-not-edit file into existing repos
+    cs108 access a04 --go     give a grader read access to the student repositories
     cs108 marks a04           clone, autograde, write gradebook.csv
     cs108 collect a04         clone and stop, for reading by hand
     cs108 sheet a04           a CSV to type manual marks into
@@ -48,6 +49,7 @@ VERBS = [
     ("template", "template",  False, True,  "starter folder -> GitHub template repository"),
     ("assign",   "assign",    True,  True,  "one private repository per student, from the template"),
     ("patch",    "patch",     True,  True,  "push a corrected do-not-edit file into existing repos"),
+    ("access",   "access",    False, True,  "give a grader read access to the student repositories"),
     ("marks",    "marks",     True,  False, "clone, autograde, write gradebook.csv"),
     ("collect",  "marks",     True,  False, "clone everything and stop, for reading by hand"),
     ("sheet",    "sheet",     True,  False, "a CSV to type manual marks into"),

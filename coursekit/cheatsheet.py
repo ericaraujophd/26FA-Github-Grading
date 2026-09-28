@@ -49,6 +49,7 @@ def lines(course: cfg.Course) -> List[Tuple[str, str]]:
     add(("cmd", f"{c} patch a04                    preview a fix to a do-not-edit file"))
     add(("cmd", f"{c} patch a04 --go               push it to everyone"))
     add(("cmd", f"{c} patch a04 --missing --go     add starter files the repos do not have yet"))
+    add(("cmd", f"{c} access a04 --go             let your grader read every student repository"))
     add(("blank", ""))
     add(("h", "GRADING"))
     add(("cmd", f"{c} marks a04                    run the autograder, write the gradebook"))

@@ -10,11 +10,15 @@ roster.py, the single authoritative list of students.
     github_id   the GitHub login. Blank until the student supplies it, and a
                 student with a blank github_id cannot be invited or given a
                 repository. `assign` says so by name.
-    role        student (the default), test, teacher or staff.
+    role        student (the default), test, grader, teacher or staff.
 
     role=test   accounts are distributed to and graded exactly like students,
                 so an assignment can be tried end to end before anyone real
                 sees it, and are EXCLUDED from class counts.
+    role=grader accounts are never distributed to and never graded, but
+                `access` gives them READ access to every student repository
+                for an assignment, so a teaching assistant can clone the
+                work without anyone mailing half a gigabyte around.
     role=teacher and role=staff rows belong on the list (it is the course's
                 list of people) but are never distributed to or graded.
 
@@ -42,6 +46,9 @@ GITHUB_ID_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"
 
 # Roles that receive repositories and get graded.
 PARTICIPANT_ROLES = ("student", "test")
+
+# Roles that get read access to the student repositories, and nothing else.
+GRADER_ROLES = ("grader", "ta")
 
 
 class RosterError(Exception):
@@ -71,6 +78,11 @@ def read_rows(path: Path) -> List[dict]:
 def participants(path: Path) -> List[dict]:
     """The rows that get repositories and marks: students and test accounts."""
     return [r for r in read_rows(path) if r["role"] in PARTICIPANT_ROLES]
+
+
+def graders(path: Path) -> List[dict]:
+    """The rows `access` gives read access to. Never participants."""
+    return [r for r in read_rows(path) if r["role"] in GRADER_ROLES]
 
 
 def students_only(rows: List[dict]) -> List[dict]:
@@ -135,6 +147,8 @@ def problems(rows: List[dict]) -> List[str]:
         gid = row["github_id"]
         if row["role"] in PARTICIPANT_ROLES and not gid:
             out.append(f"{row['username']} has no github_id, so cannot receive a repository")
+        elif row["role"] in GRADER_ROLES and not gid:
+            out.append(f"{row['username']} is a grader with no github_id, so cannot be given access")
         elif gid and not GITHUB_ID_RE.match(gid):
             out.append(f"{row['username']}: github_id {gid!r} is not a valid GitHub login")
         if gid:

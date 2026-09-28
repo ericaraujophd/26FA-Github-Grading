@@ -20,6 +20,7 @@ cs108 students import form.csv     merge new GitHub usernames
 cs108 patch a04                    preview a fix to a do-not-edit file
 cs108 patch a04 --go               push it to everyone
 cs108 patch a04 --missing --go     add starter files the repos do not have yet
+cs108 access a04 --go             let your grader read every student repository
 ```
 
 ## GRADING

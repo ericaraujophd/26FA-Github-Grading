@@ -170,6 +170,17 @@ def run(course: cfg.Course, argv) -> int:
         for username, err in problems:
             out.say(f"  {username:<24} {err}")
 
+    # A grader is not distributed to, so nothing above touched them. Say so
+    # once, here, because a repository created today is invisible to them
+    # until `access` runs.
+    try:
+        graders = rostermod.graders(course.roster)
+    except rostermod.RosterError:
+        graders = []
+    if graders:
+        out.say(f"\n{len(graders)} grader(s) on the roster ({', '.join(g['github_id'] or g['username'] for g in graders)}).")
+        out.say(f"  They get read access only when you run:  {course.course} access {a.id} --go")
+
     if args.go:
         path = course.root / f"distribution-{a.id}.csv"
         with path.open("w", newline="", encoding="utf-8") as fh:

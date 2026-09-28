@@ -112,6 +112,12 @@ mean anything. Compare `gradebook.csv` and `gradebook.second.csv`.
 it and touches nothing else. If the file is provided (not the student's
 work), also put it on `restore` so later fixes to it can be pushed.
 
+**My grader cannot see the repositories.**
+They need a roster row with `role=grader` and their GitHub login, then
+`cs108 access a04 --go`. If they still cannot see anything, they have not
+accepted the organization invitation: the command names who is waiting.
+Full walkthrough in `docs/graders.md`.
+
 **`patch` refuses a file.**
 It is not on the restore list, so students may have edited it. If it truly
 is a provided file, add it to `restore` in `assignment.json` (that is the
