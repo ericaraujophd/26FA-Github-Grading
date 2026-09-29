@@ -1,5 +1,11 @@
 # Giving a grader the student repositories
 
+**Walking someone through it?** `grader-setup.pdf`, next to this file, is the
+same thing as two printable pages: page 1 for the instructor, page 2 to hand
+straight to the TA. Rebuild it with `python3 docs/make-grader-setup.py` after
+changing anything below (that script is the one thing here needing a
+third-party package, reportlab; the toolkit itself stays standard library).
+
 A teaching assistant needs every student's work for one assignment. The
 obvious move, cloning it all and sending the folder, is the wrong shape:
 it is hundreds of megabytes, it is stale the moment a student pushes, it

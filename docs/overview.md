@@ -163,6 +163,7 @@ capability, add the verb first and surface it second.
 | `docs/score-vs-complete.md` | someone asks why a low score is marked complete |
 | `docs/troubleshooting.md` | something is wrong and you do not know which layer |
 | `docs/graders.md` | a teaching assistant needs everyone's work |
+| `docs/grader-setup.pdf` | two printable pages: TA setup for you, and for them |
 | `docs/runners.md` | before the first assignment goes out, and when the tick stops |
 | `docs/course-tooling-brief.md` | the build brief this toolkit was made from |
 | `README.md` | the short version, for installing and the first assignment |
