@@ -21,6 +21,9 @@ RULES THAT MAKE IT USABLE
     On a hand-graded assignment they are always blank, which is correct.
   - complete and changed come from the last `marks` or `collect` run. If
     neither has run yet, they are blank and the sheet says so.
+  - updated says what the last run saw: new, updated or unchanged since the
+    run before it. `--updated` keeps only the rows that moved, which is the
+    sheet to make when a pile of resubmissions comes back.
   - NEVER overwrites a sheet that has marks in it. If marks-a04.csv exists
     and any mark cell is non-empty, marks-a04-2.csv is written instead.
   - UTF-8 with a BOM and CRLF line endings, so Excel on macOS does not
@@ -47,7 +50,7 @@ from .. import ghcli, out, roster as rostermod
 from .marks import read_gradebook
 
 BASE_FIELDS = ["username", "name", "github_id", "repo", "last_push", "complete",
-               "changed", "score", "max_score"]
+               "changed", "updated", "score", "max_score"]
 MARK_FIELDS = ["mark", "comment"]
 
 
@@ -73,7 +76,8 @@ def next_free(outdir: Path, aid: str) -> Path:
     return path
 
 
-def build_rows(course: cfg.Course, a: asg.Assignment, extra: list) -> tuple:
+def build_rows(course: cfg.Course, a: asg.Assignment, extra: list,
+               only_updated: bool = False) -> tuple:
     roster = sorted(rostermod.participants(course.roster), key=rostermod.sort_key_last_name)
     outdir = course.grading_dir(a.id)
     gradebook = read_gradebook(outdir / "gradebook.csv")
@@ -104,12 +108,15 @@ def build_rows(course: cfg.Course, a: asg.Assignment, extra: list) -> tuple:
             "last_push": (repo or {}).get("pushed_at", ""),
             "complete": complete,
             "changed": k.get("changed", ""),
+            "updated": k.get("since_last", ""),
             "score": k.get("score", "") if gradebook else "",
             "max_score": k.get("max_score", "") if gradebook else "",
         }
         for f in MARK_FIELDS + extra:
             row[f] = ""
         rows.append(row)
+    if only_updated:
+        rows = [r for r in rows if r["updated"] in ("updated", "new")]
     return rows, source, gh_note
 
 
@@ -119,6 +126,8 @@ def run(course: cfg.Course, argv) -> int:
     ap.add_argument("assignment")
     ap.add_argument("--columns", help="extra empty columns, comma-separated")
     ap.add_argument("--open", action="store_true", help="open the file afterwards")
+    ap.add_argument("--updated", action="store_true",
+                    help="only students whose work moved since the previous collect or marks")
     args = ap.parse_args(argv)
 
     try:
@@ -128,10 +137,15 @@ def run(course: cfg.Course, argv) -> int:
         return 1
     extra = [c.strip() for c in (args.columns or "").split(",") if c.strip()]
     try:
-        rows, source, gh_note = build_rows(course, a, extra)
+        rows, source, gh_note = build_rows(course, a, extra, args.updated)
     except rostermod.RosterError as exc:
         out.say(f"error: {exc}")
         return 1
+
+    if args.updated and not rows:
+        out.say(f"Nothing has moved since the previous run, so there is no sheet to write.")
+        out.say(f"  Pull again first:  {course.course} collect {a.id}")
+        return 0
 
     outdir = course.grading_dir(a.id)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -145,7 +159,8 @@ def run(course: cfg.Course, argv) -> int:
     path.write_bytes(b"\xef\xbb\xbf" + buf.getvalue().encode("utf-8"))
 
     out.say(f"wrote {path}")
-    out.say(f"  {len(rows)} row(s), sorted by last name; type into: {', '.join(MARK_FIELDS + extra)}")
+    out.say(f"  {len(rows)} row(s)" + (" (only those that moved)" if args.updated else "")
+            + f", sorted by last name; type into: {', '.join(MARK_FIELDS + extra)}")
     if source:
         out.say(f"  complete/changed{'/score' if source == 'gradebook.csv' else ''} from {outdir / source}")
     else:

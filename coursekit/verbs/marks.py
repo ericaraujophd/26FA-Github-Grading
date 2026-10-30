@@ -30,6 +30,14 @@ OUTPUT, under <grading>/a04/
     logs/<user>.log        grader output, for when something looks wrong
     checkouts/<user>/      the graded working copy, kept for inspection
 
+WHAT CHANGED SINCE LAST TIME
+    Both verbs record the commit they pulled for each student in
+    collect.csv, and compare against the one recorded by the previous run.
+    Every run ends by naming the students whose work MOVED since you last
+    looked, which is the question a grader has in front of a pile of
+    resubmissions. `sheet --updated` turns that list into a marking sheet
+    of only those students.
+
 THE TWO KINDS OF COLUMN (settled 2026-09-15; see docs/score-vs-complete.md)
     score / max_score / percent   diagnostic. How close the student got.
     complete                      the column the grade table consumes: yes
@@ -272,7 +280,12 @@ def run(course: cfg.Course, argv, collect_only: bool = False) -> int:
     try:
         a = asg.load(course, args.assignment)
         roster = rostermod.select(rostermod.participants(course.roster), args.students)
-    except (asg.AssignmentError, rostermod.RosterError) as exc:
+    except asg.AssignmentError as exc:
+        out.say(f"error: {exc}")
+        out.say(f"  Grading someone else's course? Pull the setup from GitHub with:")
+        out.say(f"    {course.course} fetch {args.assignment}")
+        return 1
+    except rostermod.RosterError as exc:
         out.say(f"error: {exc}")
         return 1
 
@@ -285,7 +298,15 @@ def run(course: cfg.Course, argv, collect_only: bool = False) -> int:
         for p in a.problems():
             out.problem(p)
         if a.problems():
-            out.say(f"  Fix these first, then:  {course.course} verify {a.id}")
+            if a.is_auto and not a.bundle.is_dir():
+                # The usual reason a grader lands here: the bundle is the one
+                # part of an assignment that is never on GitHub.
+                out.say(f"  The grading bundle is not on GitHub and `fetch` cannot get it.")
+                out.say(f"  Ask the instructor for:  {course.course} access {a.id} --share")
+                out.say(f"  Meanwhile `{course.course} collect {a.id}` and "
+                        f"`{course.course} sheet {a.id}` both work.")
+            else:
+                out.say(f"  Fix these first, then:  {course.course} verify {a.id}")
             return 1
 
     outdir = course.grading_dir(a.id)
@@ -306,11 +327,17 @@ def run(course: cfg.Course, argv, collect_only: bool = False) -> int:
     if collect_only:
         untouched = sum(1 for r in rows if r["complete"] == "no")
         missing = sum(1 for r in rows if not r["commit"])
+        previous = read_pull_state(outdir)
+        updated, fresh = mark_since_last(rows, previous)
         out.say()
         out.say(f"{len(rows) - missing} repositor{'y' if len(rows) - missing == 1 else 'ies'} collected, "
                 f"{untouched} untouched starter(s), {missing} missing")
         out.say(f"{outdir / 'checkouts'}")
-        _write_collect_state(outdir, rows)
+        report_since_last(previous, updated, fresh, rows, "collect")
+        if updated or fresh:
+            out.say(f"\n  Only those students, as a marking sheet:  "
+                    f"{course.course} sheet {a.id} --updated")
+        write_pull_state(outdir, rows)
         return 0
 
     # ── the toolchain guard ─────────────────────────────────────────────
@@ -373,6 +400,11 @@ def run(course: cfg.Course, argv, collect_only: bool = False) -> int:
         else:
             out.say(out.green("complete never regressed (checked against the previous gradebook)"))
 
+    pull_previous = read_pull_state(outdir)
+    pull_updated, pull_fresh = mark_since_last(rows, pull_previous)
+    report_since_last(pull_previous, pull_updated, pull_fresh, rows, "run")
+    write_pull_state(outdir, rows)
+
     out.say(f"\ngradebook: {gradebook}")
     cfg.append_history(course.root, f"marks {a.id}: graded {len(graded)}/{len(rows)}, complete {len(complete)}/{len(rows)}"
                        + (f", as of {args.as_of}" if args.as_of else ""))
@@ -398,12 +430,90 @@ def run(course: cfg.Course, argv, collect_only: bool = False) -> int:
     return 0 if not regressions else 4
 
 
-def _write_collect_state(outdir: Path, rows: List[dict]) -> None:
-    """collect leaves a small file so `sheet` can fill complete/changed
-    without a gradebook. It is NOT a gradebook and holds no scores."""
+# collect.csv: the record of what was last pulled off GitHub, written by
+# BOTH collect and marks so the two share one notion of "when I last
+# looked". It is NOT a gradebook and holds no scores; `sheet` reads it to
+# fill complete/changed when no gradebook exists, and both verbs read it to
+# work out what moved since last time.
+PULL_FIELDS = ["username", "complete", "changed", "commit", "status",
+               "since_last", "pulled_at"]
+
+
+def read_pull_state(outdir: Path) -> dict:
+    """{username: row} from the previous collect.csv, or {} the first time."""
+    path = outdir / "collect.csv"
+    if not path.is_file():
+        return {}
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as fh:
+            return {r["username"]: r for r in csv.DictReader(fh) if r.get("username")}
+    except (OSError, csv.Error):
+        return {}
+
+
+def mark_since_last(rows: List[dict], previous: dict):
+    """Annotate every row with since_last, and return (updated, new).
+
+    The comparison is on the COMMIT, not on a timestamp: a student who
+    pushed and then force-pushed back to where they were has not moved, and
+    a clock that disagrees between two machines cannot make this wrong.
+
+        new         no row last time, or last time there was no repository
+        updated     a different commit than last time: re-read this one
+        unchanged   the same commit
+        (blank)     no repository to compare
+
+    First run of all: everyone is new, which reads as noise, so the caller
+    says "first pull" instead of listing them.
+    """
+    updated, fresh = [], []
+    for r in rows:
+        old = previous.get(r["username"])
+        if not r.get("commit"):
+            r["since_last"] = ""
+        elif old is None or not (old.get("commit") or "").strip():
+            r["since_last"] = "new"
+            fresh.append(r["username"])
+        elif old["commit"] != r["commit"]:
+            r["since_last"] = "updated"
+            updated.append(r["username"])
+        else:
+            r["since_last"] = "unchanged"
+    return updated, fresh
+
+
+def write_pull_state(outdir: Path, rows: List[dict]) -> None:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for r in rows:
+        r.setdefault("since_last", "")
+        r["pulled_at"] = stamp
     path = outdir / "collect.csv"
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=["username", "complete", "changed", "commit", "status"],
-                           extrasaction="ignore")
+        w = csv.DictWriter(fh, fieldnames=PULL_FIELDS, extrasaction="ignore", restval="")
         w.writeheader()
         w.writerows(rows)
+
+
+def report_since_last(previous: dict, updated: List[str], fresh: List[str],
+                      rows: List[dict], verb: str) -> None:
+    """The block a grader actually reads: who moved since last time."""
+    if not previous:
+        out.say(f"\nFirst {verb} of this assignment; {len([r for r in rows if r.get('commit')])} "
+                f"repositor{'y' if len([r for r in rows if r.get('commit')]) == 1 else 'ies'} recorded. "
+                f"Next time this will say what changed.")
+        return
+    when = ""
+    for r in previous.values():
+        when = (r.get("pulled_at") or "").replace("T", " ").replace("Z", " UTC")
+        if when:
+            break
+    unchanged = sum(1 for r in rows if r.get("since_last") == "unchanged")
+    out.say(f"\nSince your last {verb}" + (f" ({when})" if when else "") + ":")
+    if updated:
+        out.say(out.yellow(f"  {len(updated)} updated   ") + ", ".join(updated))
+    if fresh:
+        out.say(f"  {len(fresh)} new       " + ", ".join(fresh))
+    if unchanged:
+        out.say(out.dim(f"  {unchanged} unchanged"))
+    if not updated and not fresh:
+        out.say(out.dim("  nothing moved"))

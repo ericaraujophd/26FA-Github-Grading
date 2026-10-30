@@ -55,6 +55,8 @@ def lines(course: cfg.Course) -> List[Tuple[str, str]]:
     add(("cmd", f"{c} marks a04                    run the autograder, write the gradebook"))
     add(("cmd", f"{c} collect a04                  just download everyone's work"))
     add(("cmd", f"{c} sheet a04                    a CSV to type marks into"))
+    add(("cmd", f"{c} sheet a04 --updated          only the students whose work moved"))
+    add(("cmd", f"{c} fetch a05                    get an assignment's setup (a grader)"))
     add(("note", 'add --as-of "2026-10-14T23:59:59-04:00" to grade what existed at the deadline'))
     add(("blank", ""))
     add(("h", "WHEN SOMETHING IS WRONG"))

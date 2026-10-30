@@ -271,8 +271,9 @@ def load(course: cfg.Course, aid: str) -> Assignment:
         raise AssignmentError(
             f"there is no assignment folder at\n    {folder}\n"
             f"  That is where an assignment lives: starter/ (what the student "
-            f"gets), answers/ (your solution)\n  and assignment.json. Create it with:\n"
-            f"    {course.course} new {aid}")
+            f"gets), answers/ (your solution)\n  and assignment.json.\n"
+            f"    {course.course} new {aid}      to create it (the instructor)\n"
+            f"    {course.course} fetch {aid}    to pull it from GitHub (a grader)")
     if not path.is_file():
         raise AssignmentError(
             f"{folder} has no {ASSIGNMENT_JSON}.\n"

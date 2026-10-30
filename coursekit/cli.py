@@ -11,6 +11,7 @@ cli.py, one command for the whole course.
     cs108 access a04 --go     give a grader read access to the student repositories
     cs108 marks a04           clone, autograde, write gradebook.csv
     cs108 collect a04         clone and stop, for reading by hand
+    cs108 fetch a04           pull an assignment's setup out of GitHub (for a grader)
     cs108 sheet a04           a CSV to type manual marks into
     cs108 students import f.csv --go    merge GitHub usernames into the roster
     cs108 doctor              check everything is still healthy
@@ -52,6 +53,7 @@ VERBS = [
     ("access",   "access",    False, True,  "give a grader read access to the student repositories"),
     ("marks",    "marks",     True,  False, "clone, autograde, write gradebook.csv"),
     ("collect",  "marks",     True,  False, "clone everything and stop, for reading by hand"),
+    ("fetch",    "fetch",     False, False, "pull an assignment's setup out of GitHub (for a grader)"),
     ("sheet",    "sheet",     True,  False, "a CSV to type manual marks into"),
     ("students", "students",  False, True,  "import FILE.csv: merge GitHub usernames into the roster"),
     ("doctor",   "doctor",    False, False, "check everything is still healthy"),

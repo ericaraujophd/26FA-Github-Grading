@@ -18,6 +18,7 @@ scaffold, then publish, then assign, then push as a student, then grade.
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import json
 import os
 import shutil
@@ -382,14 +383,20 @@ class T05Grading(unittest.TestCase):
         self.assertTrue((ENV.grading / "a01" / "gradebook.previous.csv").is_file())
 
     def test_03_as_of_grades_the_earlier_commit(self):
+        # Dates are computed from today, never written down: ada's first
+        # commit happened a moment ago, so a fixed "deadline" in the
+        # calendar stops being between the two commits the day it passes.
+        now = dt.datetime.now(dt.timezone.utc)
+        later = (now + dt.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        deadline = (now + dt.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
         ada = ENV.clone(f"{COURSE}-a01-ada")
         app = ada / "app.js"
         app.write_text(app.read_text().replace("throw new Error(\"greet is not implemented yet\");",
                                                "return `Hello, ${name === undefined ? 'world' : name}!`;"))
-        ENV.push(ada, "implement greet", date="2026-10-15T12:00:00-04:00")
+        ENV.push(ada, "implement greet", date=later)
         ENV.run("marks", "a01", "--students", "ada")
         self.assertEqual(ENV.gradebook("a01")["ada"]["score"], "4")
-        ENV.run("marks", "a01", "--students", "ada", "--as-of", "2026-10-14T23:59:59-04:00")
+        ENV.run("marks", "a01", "--students", "ada", "--as-of", deadline)
         self.assertEqual(ENV.gradebook("a01")["ada"]["score"], "2")
         ENV.run("marks", "a01")
 
@@ -743,6 +750,111 @@ class T08Access(unittest.TestCase):
         text = ENV.run("doctor")
         self.assertIn("graders", text)
         self.assertIn("tmiller-gh", text)
+
+
+class T09GraderWorkflow(unittest.TestCase):
+    """The two things the CS262 grader asked for: what moved since last
+    time, and getting a new assignment's setup without the instructor
+    mailing a folder."""
+
+    def test_01_collect_compares_against_the_last_one(self):
+        # a09 was collected earlier in this run, so there is a record to
+        # compare against and nothing has moved since.
+        text = ENV.run("collect", "a09")
+        text = ENV.run("collect", "a09")
+        self.assertIn("Since your last collect", text)
+        self.assertIn("nothing moved", text)
+
+    def test_02_second_collect_names_who_moved(self):
+        clone = ENV.clone(f"{COURSE}-a09-ada")
+        (clone / "app.js").write_text("// resubmission\n")
+        ENV.push(clone, "resubmit")
+        text = ENV.run("collect", "a09")
+        self.assertIn("1 updated", text)
+        self.assertIn("ada", text.split("Since your last collect")[1])
+        self.assertNotIn("bob", text.split("Since your last collect")[1].split("unchanged")[0])
+        rows = {r["username"]: r for r in csv.DictReader(
+            (ENV.grading / "a09" / "collect.csv").read_text().splitlines())}
+        self.assertEqual(rows["ada"]["since_last"], "updated")
+        self.assertEqual(rows["bob"]["since_last"], "unchanged")
+        self.assertTrue(rows["ada"]["pulled_at"].endswith("Z"))
+
+    def test_03_sheet_updated_keeps_only_those(self):
+        text = ENV.run("sheet", "a09", "--updated")
+        path = Path(text.splitlines()[0].split("wrote ", 1)[1].strip())
+        rows = list(csv.DictReader(path.read_text("utf-8-sig").splitlines()))
+        self.assertEqual([r["username"] for r in rows], ["ada"])
+        self.assertEqual(rows[0]["updated"], "updated")
+        self.assertIn("only those that moved", text)
+
+    def test_04_marks_shares_the_same_record(self):
+        ENV.run("collect", "a01")
+        clone = ENV.clone(f"{COURSE}-a01-bob")
+        (clone / "app.js").write_text("module.exports={add:(a,b)=>a+b,greet:()=>'Hello, world!'};\n")
+        ENV.push(clone, "late work")
+        text = ENV.run("marks", "a01")
+        self.assertIn("Since your last run", text)
+        self.assertIn("1 updated", text)
+        self.assertIn("bob", text.split("Since your last run")[1])
+
+    def test_05_fetch_lists_what_is_published(self):
+        text = ENV.run("fetch")
+        self.assertIn("a01", text)
+        self.assertIn("already here", text)
+
+    def test_06_fetch_refuses_the_instructors_own_folder(self):
+        text = ENV.run("fetch", "a01", expect=1)
+        self.assertIn("instructor's own copy", text)
+
+    def test_07_a_grader_fetches_a_new_assignment(self):
+        # the instructor publishes a05 AFTER the grader got their folder
+        pack = ENV.tmp / "grader-2"
+        ENV.run("access", "a01", "--share", str(pack))
+        ENV.run("new", "a05", "--title", "Later", "--kind", "manual")
+        ENV.run("template", "a05", "--go")
+        ENV.run("assign", "a05", "--go")
+
+        # the grader has no a05 at all: collect says where to get it
+        text = ENV.run("collect", "a05", cwd=pack, expect=1)
+        self.assertIn(f"{COURSE} fetch a05", text)
+
+        text = ENV.run("fetch", "a05", cwd=pack)
+        self.assertIn("kind manual", text)
+        self.assertTrue((pack / "assignments/a05/starter/app.js").is_file())
+        self.assertTrue((pack / "assignments/a05/assignment.json").is_file())
+        self.assertFalse((pack / "assignments/a05/answers").exists())
+        self.assertFalse((pack / "assignments/a05/starter/.github").exists())
+
+        text = ENV.run("collect", "a05", cwd=pack)
+        self.assertIn("collected", text)
+        self.assertIn("First collect of this assignment", text)
+        self.assertIn("complete=no", text)      # the starter matched, so it measured it
+
+    def test_08_fetch_tells_a_grader_where_a_bundle_comes_from(self):
+        pack = ENV.tmp / "grader-2"
+        text = ENV.run("fetch", "a02", cwd=pack)
+        self.assertIn("kind auto", text)
+        self.assertIn("grading bundle is not on GitHub", text)
+        text = ENV.run("marks", "a02", cwd=pack, expect=1)
+        self.assertIn("access a02 --share", text)
+
+    def test_09_share_refreshes_instead_of_refusing(self):
+        pack = ENV.tmp / "grader-2"
+        before = (pack / "course.json").read_text()
+        text = ENV.run("access", "--share", str(pack))
+        self.assertIn("refreshed", text)
+        self.assertIn("course.json was left alone", text)
+        self.assertEqual(before, (pack / "course.json").read_text())
+        self.assertTrue((pack / "assignments/a05/starter/app.js").is_file())
+        bare = ENV.tmp / "not-a-pack"
+        bare.mkdir()
+        (bare / "something.txt").write_text("x")
+        text = ENV.run("access", "--share", str(bare), expect=1)
+        self.assertIn("not a share folder", text)
+
+    def test_10_template_grants_the_grader_read_on_it(self):
+        state = ENV.gh_state()["orgs"][ORG]["repos"][f"{COURSE}-a05-starter"]
+        self.assertEqual(state.get("collaborators", {}).get("tmiller-gh"), "read")
 
 
 if __name__ == "__main__":

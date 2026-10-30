@@ -126,8 +126,8 @@ story.append(para(
     "Your TA does not need a copy of anyone's work emailed to them. They get "
     "read access to the student repositories and clone them themselves, with "
     "the same commands you use. Nothing is sent, nothing goes stale, and a "
-    "late push costs them seconds. Part 1 is yours. Part 2 can be handed "
-    "straight to the TA."))
+    "late push costs them seconds. Page 1 is yours. Pages 2 and 3 can be "
+    "handed straight to the TA."))
 
 # ── PART 1 ───────────────────────────────────────────────────────────
 story.append(Spacer(1, 6))
@@ -170,6 +170,10 @@ story.append(step(5, "<b>Send the TA two things:</b> that folder, zipped, and th
 story += code(TOOLKIT_REPO)
 
 story.append(Spacer(1, 4))
+story.append(para("<b>When you publish a later assignment,</b> the TA gets it themselves "
+                  "with <font face='Courier' size='9'>cs262 fetch a05</font>; you only "
+                  "re-run <font face='Courier' size='9'>--share</font> over their folder "
+                  "if they need a grading bundle, and it leaves their settings alone."))
 story.append(para("<b>At any point:</b> <font face='Courier' size='9'>cs262 access a04</font> "
                   "on its own shows who has access to what, and "
                   "<font face='Courier' size='9'>cs262 access a04 --revoke --go</font> takes "
@@ -202,13 +206,29 @@ story.append(step(4, "<b>Put the command on your PATH</b> if the installer says 
                      "<font face='Courier' size='9'>cs262</font>."))
 story.append(step(5, "<b>Grade.</b>"))
 story += code("cs262 collect a04     # clones all 42 into ~/cs262-grading/a04/checkouts/",
-              "cs262 sheet a04       # a CSV, sorted by last name, with empty mark columns",
+              "cs262 sheet a04       # a CSV, sorted by last name, with empty mark columns")
+story.append(note("Add --as-of \"2026-10-14T23:59:59-04:00\" to either one to grade what "
+                  "existed at the deadline. Re-running collect updates the clones instead "
+                  "of downloading again, so picking up a late push takes seconds."))
+story.append(step(6, "<b>Each run tells you who moved.</b> Both collect and marks end "
+                     "with a block naming the students whose work changed since your "
+                     "previous run, which is the list to re-read after resubmissions:"))
+story += code("Since your last collect (2026-10-28 14:02 UTC):",
+              "  3 updated   ada, bob, cara",
+              "  1 new",
+              "  9 unchanged",
               "",
-              "# to grade what existed at the deadline, add to either one:",
-              "#   --as-of \"2026-10-14T23:59:59-04:00\"")
-story.append(note("Re-running collect updates the clones instead of downloading again, so "
-                  "picking up a late push takes seconds."))
-story.append(step(6, "<b>Fill in the CSV and send it back.</b> Type in the "
+              "cs262 sheet a04 --updated    # a marking sheet of only those students")
+story.append(step(7, "<b>When a new assignment comes out</b>, you do not need a new copy "
+                     "of this folder:"))
+story += code("cs262 fetch              # what is published that you do not have",
+              "cs262 fetch a05          # pull a05's setup out of GitHub",
+              "cs262 collect a05")
+story.append(note("fetch gets the starter, which is all GitHub holds. Hand-graded "
+                  "assignments need nothing else. An autograded one also needs the "
+                  "grading bundle, which only the instructor has: ask them to re-run "
+                  "access --share over this folder."))
+story.append(step(8, "<b>Fill in the CSV and send it back.</b> Type in the "
                      "<font face='Courier' size='9'>mark</font> and "
                      "<font face='Courier' size='9'>comment</font> columns in a spreadsheet. "
                      "Nothing reads it back automatically, so email it to the instructor."))
@@ -222,6 +242,15 @@ rows = [
     ["One student says “no repository”",
      "That student has no GitHub username on the roster yet. Not your problem "
      "to fix; tell the instructor."],
+    ["a05 is not in my folder",
+     "cs262 fetch a05 pulls its setup from GitHub. cs262 fetch on its own lists "
+     "what is published and what is missing here."],
+    ["Who resubmitted since I last looked?",
+     "Every collect and marks ends with a block naming them. cs262 sheet a04 "
+     "--updated writes a sheet of only those students."],
+    ["marks says the bundle is missing",
+     "Autograded assignments need a grading bundle, which is never on GitHub. Ask "
+     "the instructor to run cs262 access a05 --share over your folder."],
     ["git asks for a password",
      "Run gh auth setup-git again."],
     ["The command is not found",

@@ -82,6 +82,57 @@ cs108 marks a04       # autograded assignments: runs the grader, writes a gradeb
 `--as-of "2026-10-14T23:59:59-04:00"` so they grade what existed at the
 deadline. The generated folder carries a README saying all of this.
 
+## What moved since last time
+
+Every `collect` and every `marks` ends by naming the students whose work
+changed since the previous run:
+
+```
+Since your last collect (2026-10-28 14:02 UTC):
+  3 updated   ada, bob, cara
+  1 new
+  9 unchanged
+```
+
+The comparison is on the commit, not on a timestamp, so a student who
+pushed and reverted has not moved, and two machines with different clocks
+cannot disagree about it. Both verbs write the same record
+(`<grading>/<assignment>/collect.csv`), so the instructor and the grader
+each see what moved since *they* last looked.
+
+For a pile of resubmissions, turn that list into a marking sheet of only
+those students:
+
+```bash
+cs108 sheet a04 --updated
+```
+
+The full sheet also carries an `updated` column, so it can be sorted on.
+
+## A new assignment, without a new folder
+
+The folder `--share` wrote knows about the assignments that existed the day
+it was written. When a05 is published weeks later, the grader runs:
+
+```bash
+cs108 fetch              # what is published that this folder does not have
+cs108 fetch a05          # pull a05's starter out of its template repository
+```
+
+That gets the starter, which is what `complete` is measured against, and
+writes an `assignment.json` with `kind` inferred from the workflow the
+template carries. `collect` and `sheet` then work normally.
+
+`answers/` and the grading bundle are never on GitHub, so `fetch` cannot
+get them. For a hand-graded assignment that is the whole story. For an
+autograded one the grader can collect and sheet but not `marks`, and both
+`fetch` and `marks` say so and point at `access --share`, which the
+instructor can re-run over the grader's existing folder: it adds the new
+assignment and leaves their `course.json` alone.
+
+`template --go` grants graders read on each new template repository as it
+publishes, so `fetch` works the same day.
+
 ## Without installing anything
 
 A grader who only wants the code, once, needs nothing but `gh`:

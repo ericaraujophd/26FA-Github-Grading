@@ -75,6 +75,48 @@ from .. import ghcli, out, roster as rostermod
 CAN_READ = ("read", "triage", "write", "maintain", "admin")
 
 
+def settle_membership(course: cfg.Course, graders: List[dict], go: bool):
+    """Make sure each grader is in the organization. Returns (active, waiting).
+
+    Shared by access, assign and template so all three agree on the rule
+    that matters: grant repository access only to an ACTIVE member. Adding
+    a pending member as a collaborator sends a second, per-repository
+    invitation, so a class of forty-two would mean forty-two emails to
+    accept instead of one.
+    """
+    active, waiting = [], []
+    for g in graders:
+        login = g["github_id"]
+        if not login:
+            continue
+        state = ghcli.membership_state(course.org, login)
+        if state != "active" and go:
+            state, err = ghcli.invite(course.org, login)
+            if err:
+                out.bad_line(login, f"grader: {err}")
+                continue
+        (active if state == "active" else waiting).append(g if state == "active" else login)
+    return active, waiting
+
+
+def grant_graders(full_names: List[str], graders: List[dict]):
+    """Read access for each grader on each repository. Returns (granted, errors).
+
+    PUT is idempotent, so this costs one call per grader per repository and
+    never needs a check first. `pull` and nothing else: a grader cannot push
+    to a student's work, and no flag in this toolkit will give them that.
+    """
+    granted, errors = 0, []
+    for full in full_names:
+        for g in graders:
+            err = ghcli.grant_access(full, g["github_id"], "pull")
+            if err:
+                errors.append(f"{g['github_id']} on {full}: {err}")
+            else:
+                granted += 1
+    return granted, errors
+
+
 def graders_or_explain(course: cfg.Course) -> List[dict]:
     """The roster's grader rows, or an empty list plus an explanation."""
     try:
@@ -119,16 +161,33 @@ def share(course: cfg.Course, dest: Path, wanted: str, graders: List[dict],
     instructor's job, not theirs.
     """
     dest = Path(dest).expanduser()
+    refreshing = False
     if dest.exists() and any(dest.iterdir()):
-        out.say(f"error: {dest} already exists and is not empty; pick another folder")
-        return 1
+        # A grader installs the toolkit INTO this folder, so re-running
+        # `--share` to add a newly published assignment must update it in
+        # place rather than refuse. Their course.json is theirs after that
+        # install (it carries their own paths), so it is never overwritten.
+        existing = dest / cfg.CONFIG_NAME
+        same_course = False
+        if existing.is_file():
+            try:
+                same_course = __import__("json").loads(
+                    existing.read_text(encoding="utf-8")).get("course") == course.course
+            except ValueError:
+                same_course = False
+        if not same_course:
+            out.say(f"error: {dest} already exists and is not a share folder for "
+                    f"{course.course}; pick another folder")
+            return 1
+        refreshing = True
     ids = [wanted] if wanted else asg.list_ids(course)
 
     (dest / "roster").mkdir(parents=True, exist_ok=True)
-    data = {k: v for k, v in course.data.items() if k in cfg.DESCRIPTIONS}
-    data["grading"] = f"~/{course.course}-grading"
-    (dest / cfg.CONFIG_NAME).write_text(
-        __import__("json").dumps(data, indent=2) + "\n", encoding="utf-8")
+    if not refreshing:
+        data = {k: v for k, v in course.data.items() if k in cfg.DESCRIPTIONS}
+        data["grading"] = f"~/{course.course}-grading"
+        (dest / cfg.CONFIG_NAME).write_text(
+            __import__("json").dumps(data, indent=2) + "\n", encoding="utf-8")
 
     rows = rostermod.read_rows(course.roster)
     for r in rows:
@@ -182,6 +241,15 @@ for an assignment. You cannot push to a student repository.
 
        ./install --course {course.course} --org {course.org} --folder "$(pwd)"
 
+## When a new assignment comes out
+
+    {course.course} fetch              # what is published that you do not have
+    {course.course} fetch a05          # pull a05's starter out of GitHub
+
+You do not need a new copy of this folder for each assignment. Hand-graded
+assignments need nothing else. An autograded one also needs the grading
+bundle, which is not on GitHub: ask the instructor for it.
+
 ## Every time you grade
 
     {course.course} collect {copied[0] if copied else 'a04'}
@@ -212,7 +280,9 @@ work, and no command here will let you.
 Prepared for {names}.
 """, encoding="utf-8")
 
-    out.say(f"wrote {dest}")
+    out.say(f"{'refreshed' if refreshing else 'wrote'} {dest}")
+    if refreshing:
+        out.say(f"  their course.json was left alone (their install owns it)")
     out.say(f"  course.json, roster/roster.csv (email addresses blanked),")
     out.say(f"  and {len(copied)} assignment(s): {', '.join(copied) or 'none'}")
     if solutions:

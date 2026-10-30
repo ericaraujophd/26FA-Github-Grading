@@ -62,7 +62,10 @@ A teaching assistant grades with you: add a roster row with `role=grader`
 and `assign --go` grants them read access as it hands repositories out.
 `cs108 access a04 --go` covers what is already out there, and
 `cs108 access a04 --share ~/for-grader` writes the folder they run
-`collect` and `marks` from. See `docs/graders.md`.
+`collect` and `marks` from. Every pull names who has changed since the last
+one, `sheet --updated` makes a sheet of only those, and `cs108 fetch a05`
+gets them a newly published assignment without a new folder. See
+`docs/graders.md`.
 
 `marks` writes `~/cs108-grading/a01/gradebook.csv`. The `complete` column
 (pushed anything beyond the starter) is the one to use; `score` is

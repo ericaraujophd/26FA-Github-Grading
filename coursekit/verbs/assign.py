@@ -48,6 +48,7 @@ import csv
 from .. import assignment as asg
 from .. import config as cfg
 from .. import ghcli, out, roster as rostermod
+from . import access
 
 
 def run(course: cfg.Course, argv) -> int:
@@ -110,19 +111,7 @@ def run(course: cfg.Course, argv) -> int:
         graders = [g for g in rostermod.graders(course.roster) if g["github_id"]]
     except rostermod.RosterError:
         graders = []
-    active_graders, waiting_graders = [], []
-    for g in graders:
-        login = g["github_id"]
-        state = ghcli.membership_state(course.org, login)
-        if state != "active" and args.go:
-            state, err = ghcli.invite(course.org, login)
-            if err:
-                out.bad_line(login, f"grader: {err}")
-                continue
-        if state == "active":
-            active_graders.append(g)
-        else:
-            waiting_graders.append(login)
+    active_graders, waiting_graders = access.settle_membership(course, graders, args.go)
     if graders:
         who = ", ".join(g["github_id"] for g in graders)
         out.say(f"  graders  : {who} (read access on every repository below)\n")
@@ -185,14 +174,12 @@ def run(course: cfg.Course, argv) -> int:
                 row["error"] = err
                 problems.append((username, err))
 
-        # Read for the graders. PUT is idempotent, so this costs one call
-        # per grader per repository and never needs a check first.
-        for g in (active_graders if args.go else []):
-            err = ghcli.grant_access(full_name, g["github_id"], "pull")
-            if err:
-                grader_errors.append(f"{g['github_id']} on {full_name}: {err}")
-            else:
-                grader_grants += 1
+        # Read for the graders, through the same helper access and template
+        # use, so the three cannot drift apart on what a grader may do.
+        if args.go and active_graders:
+            n, errs = access.grant_graders([full_name], active_graders)
+            grader_grants += n
+            grader_errors += errs
 
         out.ok_line(username, f"{state:<14} {repo_state:<12} {full_name}")
         rows.append(row)

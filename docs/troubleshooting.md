@@ -112,6 +112,16 @@ mean anything. Compare `gradebook.csv` and `gradebook.second.csv`.
 it and touches nothing else. If the file is provided (not the student's
 work), also put it on `restore` so later fixes to it can be pushed.
 
+**I am the grader and this folder knows nothing about a05.**
+`cs108 fetch a05` pulls its setup out of the template repository on GitHub.
+`cs108 fetch` on its own lists what is published and what is missing here.
+It cannot fetch a grading bundle (never on GitHub); ask the instructor to
+re-run `cs108 access a05 --share` over your folder.
+
+**Which students have resubmitted since I last looked?**
+Every `collect` and `marks` ends with a "since your last" block naming
+them, and `cs108 sheet a04 --updated` writes a marking sheet of only those.
+
 **My grader cannot see the repositories.**
 They need a roster row with `role=grader` and their GitHub login, then
 `cs108 access a04 --go`. If they still cannot see anything, they have not

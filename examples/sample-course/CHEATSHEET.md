@@ -29,6 +29,8 @@ cs108 access a04 --go             let your grader read every student repository
 cs108 marks a04                    run the autograder, write the gradebook
 cs108 collect a04                  just download everyone's work
 cs108 sheet a04                    a CSV to type marks into
+cs108 sheet a04 --updated          only the students whose work moved
+cs108 fetch a05                    get an assignment's setup (a grader)
   add --as-of "2026-10-14T23:59:59-04:00" to grade what existed at the deadline
 ```
 
@@ -60,4 +62,4 @@ autograders/a04/               the grading bundle, never published
 course.json                    every setting; course-history.log says what changed
 ```
 
-Course folder: `/home/claude/kit/examples/sample-course`. Long versions: the toolkit's `docs/` folder.
+Course folder: `/sessions/rcw-013lkwzxd2aw4nm4b9g4k69v/mnt/26FA-Github-Grading/examples/sample-course`. Long versions: the toolkit's `docs/` folder.

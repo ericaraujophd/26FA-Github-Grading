@@ -39,7 +39,8 @@ from pathlib import Path
 
 from .. import assignment as asg
 from .. import config as cfg
-from .. import ghcli, out, scaffold
+from .. import ghcli, out, roster as rostermod, scaffold
+from . import access
 
 
 def _git(argv, cwd):
@@ -199,6 +200,25 @@ def run(course: cfg.Course, argv) -> int:
                 f"https://github.com/{full}/settings")
     else:
         out.say(f"{full} is marked as a template repository")
+
+    # Graders read the template repository: it is what `fetch` clones to get
+    # an assignment's starter, and the only copy of the starter they can
+    # reach. Granting at publish time means an assignment published today is
+    # fetchable today, instead of waiting for someone to run `access`.
+    try:
+        graders = [g for g in rostermod.graders(course.roster) if g["github_id"]]
+    except rostermod.RosterError:
+        graders = []
+    if graders:
+        active, waiting = access.settle_membership(course, graders, True)
+        granted, errors = access.grant_graders([full], active)
+        if granted:
+            out.say(f"read access on the template granted to "
+                    f"{', '.join(g['github_id'] for g in active)}")
+        for err in errors[:3]:
+            out.say(f"  {err}")
+        if waiting:
+            out.say(f"  waiting on {', '.join(waiting)} to accept the organization invitation")
 
     cfg.append_history(course.root, f"template {a.id} published to {full}")
     out.say(f"\nStudents who already have repositories are unaffected. "
